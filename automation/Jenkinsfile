@@ -101,6 +101,33 @@ pipeline {
             }
         }
 
+        stage('Start Node Exporter') {
+            steps {
+                sh '''
+                    if sudo podman ps -a --format "{{.Names}}" | grep -q "^node-exporter$"; then
+                        echo "Container node-exporter already exists, removing..."
+                        sudo podman rm -f node-exporter
+                    fi
+
+                    sudo podman run -d \
+                        --name node-exporter \
+                        --network llm-net \
+                        -p 9100:9100 \
+                        --pid=host \
+                        -v /proc:/host/proc:ro \
+                        -v /sys:/host/sys:ro \
+                        -v /:/rootfs:ro \
+                        docker.io/prom/node-exporter:latest \
+                        --path.procfs=/host/proc \
+                        --path.sysfs=/host/sys \
+                        --path.rootfs=/rootfs
+
+                    echo "Waiting for Node Exporter to start..."
+                    sleep 5
+                '''
+            }
+        }
+
         stage('Start Grafana') {
             steps {
                 sh '''
@@ -129,7 +156,7 @@ pipeline {
                     echo "=== Running containers ==="
                     sudo podman ps
 
-                    for c in ollama open-webui prometheus grafana; do
+                    for c in ollama open-webui prometheus node-exporter grafana; do
                         if sudo podman ps --format "{{.Names}}" | grep -q "^${c}$"; then
                             echo "$c is running"
                         else
