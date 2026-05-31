@@ -93,6 +93,7 @@ pipeline {
                         --name prometheus \
                         --network llm-net \
                         -p 9090:9090 \
+                        -v /opt/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:Z \
                         docker.io/prom/prometheus:latest
 
                     echo "Waiting for Prometheus to start..."
