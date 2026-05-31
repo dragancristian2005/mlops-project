@@ -1,6 +1,14 @@
 pipeline {
     agent any
 
+    parameters {
+        choice(
+            name: 'OLLAMA_MODEL',
+            choices: ['qwen2.5:0.5b', 'llama3.2:1b', 'mistral:7b'],
+            description: 'Choose the model to deploy'
+        )
+    }
+
     stages {
 
         stage('Create podman network') {
@@ -46,7 +54,7 @@ pipeline {
                 sh '''
                     # Pull Qwen2.5 0.5B Instruct into the running Ollama container.
                     # Skipped automatically by Ollama if already present.
-                    sudo podman exec ollama ollama pull qwen2.5:0.5b
+                    sudo podman exec ollama ollama pull ${params.OLLAMA_MODEL}
                 '''
             }
         }
