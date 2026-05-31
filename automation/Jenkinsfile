@@ -1,0 +1,115 @@
+pipeline {
+    agent any
+
+    stages {
+
+        stage('Create podman network') {
+            steps {
+                sh '''
+                    # Isolated network so the containers can reach each other by name
+                    if sudo podman network exists llm-net 2>/dev/null; then
+                        echo "Network llm-net already exists, skipping..."
+                    else
+                        sudo podman network create llm-net
+                        echo "Network llm-net created."
+                    fi
+                '''
+            }
+        }
+
+        stage('Start Ollama container') {
+            steps {
+                sh '''
+                    # Remove a previous container if this is a re-run
+                    if sudo podman ps -a --format "{{.Names}}" | grep -q "^ollama$"; then
+                        echo "Container ollama already exists, removing..."
+                        sudo podman rm -f ollama
+                    fi
+
+                    # Ollama serves the model on 11434. The named volume keeps the
+                    # model on disk so re-runs don't re-download it.
+                    sudo podman run -d \
+                        --name ollama \
+                        --network llm-net \
+                        -v ollama-data:/root/.ollama \
+                        -p 11434:11434 \
+                        docker.io/ollama/ollama:latest
+
+                    echo "Waiting for Ollama to be ready..."
+                    sleep 10
+                '''
+            }
+        }
+
+        stage('Pull model') {
+            steps {
+                sh '''
+                    # Pull Qwen2.5 0.5B Instruct into the running Ollama container.
+                    # Skipped automatically by Ollama if already present.
+                    sudo podman exec ollama ollama pull qwen2.5:0.5b
+                '''
+            }
+        }
+
+        stage('Start open-webui container') {
+            steps {
+                sh '''
+                    if sudo podman ps -a --format "{{.Names}}" | grep -q "^open-webui$"; then
+                        echo "Container open-webui already exists, removing..."
+                        sudo podman rm -f open-webui
+                    fi
+
+                    # Frontend on host port 3000. OLLAMA_BASE_URL reaches the ollama
+                    # container by name over the internal llm-net network.
+                    sudo podman run -d \
+                        --name open-webui \
+                        --network llm-net \
+                        -p 3000:8080 \
+                        -e OLLAMA_BASE_URL=http://ollama:11434 \
+                        -v open-webui-data:/app/backend/data \
+                        ghcr.io/open-webui/open-webui:main
+
+                    echo "Waiting for open-webui to start..."
+                    sleep 5
+                '''
+            }
+        }
+
+        stage('Verify containers are running') {
+            steps {
+                sh '''
+                    echo "=== Running containers ==="
+                    sudo podman ps
+
+                    for c in ollama open-webui; do
+                        if sudo podman ps --format "{{.Names}}" | grep -q "^${c}$"; then
+                            echo "$c is running"
+                        else
+                            echo "$c is NOT running"
+                            sudo podman logs $c || true
+                            exit 1
+                        fi
+                    done
+                '''
+            }
+        }
+    }
+
+    post {
+        success {
+            echo '''
+Deploy successful!
+   - Ollama API  : http://localhost:11434
+   - Open WebUI  : http://localhost:3000   (use your VM IP instead of localhost from the Mac)
+            '''
+        }
+        failure {
+            sh '''
+                echo "=== Debug info ==="
+                sudo podman ps -a || true
+                sudo podman logs ollama 2>/dev/null || true
+                sudo podman logs open-webui 2>/dev/null || true
+            '''
+        }
+    }
+}
