@@ -1,0 +1,50 @@
+pipeline {
+    agent any
+
+    stages {
+        stage('Stop containers') {
+            steps {
+                sh '''
+                    for c in open-webui ollama prometheus node-exporter grafana; do
+                        if sudo podman ps -a --format "{{.Names}}" | grep -q "^${c}$"; then
+                            echo "Stopping and removing $c..."
+                            sudo podman rm -f $c
+                        else
+                            echo "$c is not running, skipping..."
+                        fi
+                    done
+                '''
+            }
+        }
+
+        stage('Remove network') {
+            steps {
+                sh '''
+                    if sudo podman network exists llm-net 2>/dev/null; then
+                        echo "Removing network llm-net..."
+                        sudo podman network rm llm-net
+                    else
+                        echo "Network llm-net does not exist, skipping..."
+                    fi
+                '''
+            }
+        }
+
+        stage('Verify cleanup') {
+            steps {
+                sh '''
+                    echo "=== Remaining containers ==="
+                    sudo podman ps -a
+                    echo "=== Remaining networks ==="
+                    sudo podman network ls
+                '''
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Teardown complete. All containers and networks removed."
+        }
+    }
+}
