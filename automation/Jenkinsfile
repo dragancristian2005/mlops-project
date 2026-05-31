@@ -81,13 +81,55 @@ pipeline {
             }
         }
 
+        stage('Start Prometheus') {
+            steps {
+                sh '''
+                    if sudo podman ps -a --format "{{.Names}}" | grep -q "^prometheus$"; then
+                        echo "Container prometheus already exists, removing..."
+                        sudo podman rm -f prometheus
+                    fi
+
+                    sudo podman run -d \
+                        --name prometheus \
+                        --network llm-net \
+                        -p 9090:9090 \
+                        prom/prometheus:latest
+
+                    echo "Waiting for Prometheus to start..."
+                    sleep 5
+                '''
+            }
+        }
+
+        stage('Start Grafana') {
+            steps {
+                sh '''
+                    if sudo podman ps -a --format "{{.Names}}" | grep -q "^grafana$"; then
+                        echo "Container grafana already exists, removing..."
+                        sudo podman rm -f grafana
+                    fi
+
+                    sudo podman run -d \
+                        --name grafana \
+                        --network llm-net \
+                        -p 3001:3000 \
+                        -e GF_SECURITY_ADMIN_PASSWORD=admin \
+                        -v grafana-data:/var/lib/grafana \
+                        grafana/grafana:latest
+
+                    echo "Waiting for Grafana to start..."
+                    sleep 5
+                '''
+            }
+        }
+
         stage('Verify containers are running') {
             steps {
                 sh '''
                     echo "=== Running containers ==="
                     sudo podman ps
 
-                    for c in ollama open-webui; do
+                    for c in ollama open-webui prometheus grafana; do
                         if sudo podman ps --format "{{.Names}}" | grep -q "^${c}$"; then
                             echo "$c is running"
                         else
