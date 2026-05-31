@@ -93,7 +93,7 @@ pipeline {
                         --name prometheus \
                         --network llm-net \
                         -p 9090:9090 \
-                        prom/prometheus:latest
+                        docker.io/prom/prometheus:latest
 
                     echo "Waiting for Prometheus to start..."
                     sleep 5
@@ -115,7 +115,7 @@ pipeline {
                         -p 3001:3000 \
                         -e GF_SECURITY_ADMIN_PASSWORD=admin \
                         -v grafana-data:/var/lib/grafana \
-                        grafana/grafana:latest
+                        docker.io/grafana/grafana:latest
 
                     echo "Waiting for Grafana to start..."
                     sleep 5
