@@ -54,7 +54,7 @@ pipeline {
                 sh '''
                     # Pull Qwen2.5 0.5B Instruct into the running Ollama container.
                     # Skipped automatically by Ollama if already present.
-                    sudo podman exec ollama ollama pull ${params.OLLAMA_MODEL}
+                    sudo podman exec ollama ollama pull "${params.OLLAMA_MODEL}"
                 '''
             }
         }
